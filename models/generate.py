@@ -23,6 +23,7 @@ Examples
 
 import argparse
 import os
+from dotenv import load_dotenv
 
 def get_model(args):
     """Initialize the appropriate model based on arguments."""
@@ -30,7 +31,7 @@ def get_model(args):
     api_key = args.api_key
 
     # OpenAI models
-    if args.model.startswith(("gpt-4", "o1")):
+    if args.model.startswith(("gpt-4", "o1")) and args.provider != "poe":
         if not api_key:
             api_key = os.environ.get("OPENAI_API_KEY")
         from models.openai_models import OpenAIModel
@@ -67,6 +68,11 @@ def get_model(args):
     elif args.model.startswith("reka"):
         from models.reka_models import RekaModel
         return RekaModel(args.model)
+
+    # Poe models via OpenAI-compatible API
+    elif args.provider == "poe" or os.environ.get("POE_API_KEY"):
+        from models.poe_models import PoeModel
+        return PoeModel(args.model, api_key=args.api_key)
     
     else:
         raise ValueError(f"Unknown model: {args.model}")
@@ -90,6 +96,12 @@ def main():
         help="API key (required for some models)"
     )
     parser.add_argument(
+        "--provider",
+        default="auto",
+        choices=["auto", "openai", "gemini", "anthropic", "poe", "xai", "reka", "pixtral"],
+        help="Force a specific provider; defaults to auto-detect"
+    )
+    parser.add_argument(
         "--server_url",
         default="127.0.0.1",
         help="Server URL for Pixtral server"
@@ -102,9 +114,14 @@ def main():
 
     args = parser.parse_args()
 
+    # Load environment variables from a .env file if present
+    load_dotenv()
+
     # Set API keys from environment if not provided
     if not args.api_key:
-        if "OPENAI_API_KEY" in os.environ:
+        if args.provider == "poe" and "POE_API_KEY" in os.environ:
+            args.api_key = os.environ["POE_API_KEY"]
+        elif "OPENAI_API_KEY" in os.environ:
             args.api_key = os.environ["OPENAI_API_KEY"]
         elif "XAI_API_KEY" in os.environ:
             args.api_key = os.environ["XAI_API_KEY"]
